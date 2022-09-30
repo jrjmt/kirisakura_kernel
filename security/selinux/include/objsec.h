@@ -62,7 +62,6 @@ struct inode_security_struct {
 	u32 sid;		/* SID of this object */
 	u16 sclass;		/* security class of this object */
 	unsigned char initialized;	/* initialization flag */
-	void *pfk_data;			/* Per-File-Key data from ecryptfs */
 	spinlock_t lock;
 };
 
