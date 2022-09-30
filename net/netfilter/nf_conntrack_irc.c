@@ -278,31 +278,42 @@ static int help(struct sk_buff *skb, unsigned int protoff,
 	data = ib_ptr;
 	data_limit = ib_ptr + skb->len - dataoff;
 
-	/* If packet is coming from IRC server
-	 * parse the packet for different type of
-	 * messages (MOTD,NICK etc) and process
-	 * accordingly
-	 */
-	if (dir == IP_CT_DIR_REPLY) {
-		/* strlen("NICK xxxxxx")
-		 * 5+strlen("xxxxxx")=1 (minimum length of nickname)
-		 */
+	/* Skip any whitespace */
+	while (data < data_limit - 10) {
+		if (*data == ' ' || *data == '\r' || *data == '\n')
+			data++;
+		else
+			break;
+	}
 
-		while (data < data_limit - 6) {
-			if (memcmp(data, " MOTD ", 6)) {
-				data++;
-				continue;
-			}
-			/* MOTD message signifies successful
-			 * registration with server
-			 */
-			tuple = &ct->tuplehash[!dir].tuple;
-			temp = search_client_by_ip(tuple);
-			if (temp && !temp->conn_to_server)
-				temp->conn_to_server = true;
-			ret = NF_ACCEPT;
+	/* strlen("PRIVMSG x ")=10 */
+	if (data < data_limit - 10) {
+		if (strncasecmp("PRIVMSG ", data, 8))
 			goto out;
+		data += 8;
+	}
+
+	/* strlen(" :\1DCC SENT t AAAAAAAA P\1\n")=26
+	 * 7+MINMATCHLEN+strlen("t AAAAAAAA P\1\n")=26
+	 */
+	while (data < data_limit - (21 + MINMATCHLEN)) {
+		/* Find first " :", the start of message */
+		if (memcmp(data, " :", 2)) {
+			data++;
+			continue;
 		}
+		data += 2;
+
+		/* then check that place only for the DCC command */
+		if (memcmp(data, "\1DCC ", 5))
+			goto out;
+		data += 5;
+		/* we have at least (21+MINMATCHLEN)-(2+5) bytes valid data left */
+
+		iph = ip_hdr(skb);
+		pr_debug("DCC found in master %pI4:%u %pI4:%u\n",
+			 &iph->saddr, ntohs(th->source),
+			 &iph->daddr, ntohs(th->dest));
 
 		/* strlen("NICK :xxxxxx")
 		 * 6+strlen("xxxxxx")=1 (minimum length of nickname)
@@ -316,6 +327,7 @@ static int help(struct sk_buff *skb, unsigned int protoff,
 				data++;
 				continue;
 			}
+<<<<<<< HEAD
 			data += 6;
 			nick_end = data;
 			i = 0;
@@ -340,6 +352,18 @@ static int help(struct sk_buff *skb, unsigned int protoff,
 					kfree(temp);
 					ret = NF_ACCEPT;
 				}
+=======
+			data += strlen(dccprotos[i]);
+			pr_debug("DCC %s detected\n", dccprotos[i]);
+
+			/* we have at least
+			 * (21+MINMATCHLEN)-7-dccprotos[i].matchlen bytes valid
+			 * data left (== 14/13 bytes) */
+			if (parse_dcc(data, data_limit, &dcc_ip,
+				       &dcc_port, &addr_beg_p, &addr_end_p)) {
+				pr_debug("unable to parse dcc command\n");
+				continue;
+>>>>>>> a9bb06497a5d9625e9edaf447dff98603bdd72c4
 			}
 			/*NICK during registration*/
 			ret = NF_ACCEPT;
