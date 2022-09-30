@@ -4043,10 +4043,12 @@ static int selinux_task_kill(struct task_struct *p, struct siginfo *info,
 		perm = PROCESS__SIGNULL; /* null signal; existence test */
 	else
 		perm = signal_to_av(sig);
-	if (!secid)
-		secid = current_sid();
-	return avc_has_perm(&selinux_state,
-			    secid, task_sid(p), SECCLASS_PROCESS, perm, NULL);
+	if (secid)
+		rc = avc_has_perm(secid, task_sid(p),
+				  SECCLASS_PROCESS, perm, NULL);
+	else
+		rc = current_has_perm(p, perm);
+	return rc;
 }
 
 static void selinux_task_to_inode(struct task_struct *p,
